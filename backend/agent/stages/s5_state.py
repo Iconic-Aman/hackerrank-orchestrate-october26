@@ -14,7 +14,7 @@ def _derive_state_from_facts(
     category: str,
     state_vocab: dict[str, str],
 ) -> tuple[str, list[str]]:
-    # Tombstone check: if tombstone category, inspect direct PII fields
+    # Tombstone check
     if category == "ACCOUNT_TOMBSTONE" or any("tombstone" in f.resource_id for f in facts):
         for f in facts:
             pii_exposed = []
@@ -25,17 +25,28 @@ def _derive_state_from_facts(
                 return "PRESENT", pii_exposed
         return "REDACTED", []
 
+    # Analytics profile check
+    if category == "ANALYTICS_PROFILE":
+        for f in facts:
+            for k in ["email", "phone", "name", "email_hash", "correlation_key", "lookup_key", "customer_reference"]:
+                val = f.fields.get(k)
+                if val and val not in ("None", "null", "no direct identifier"):
+                    return "IDENTIFIABLE", [k]
+            if f.raw_state == "IDENTIFIABLE":
+                return "IDENTIFIABLE", ["identifier"]
+        return "ANONYMIZED", []
+
     # Check raw_state tokens
     worst_state = "ABSENT"
     state_severity = {
         "ABSENT": 0, "REDACTED": 1, "ANONYMIZED": 1, "DISABLED": 1, "BLOCKED": 1,
         "IDENTIFIABLE": 2, "ACTIVE": 3, "PRESENT": 3
     }
-    
+
     for f in facts:
         token = (f.raw_state or "").upper()
         mapped = state_vocab.get(token)
-        
+
         if not mapped:
             if token == "IDENTIFIABLE":
                 mapped = "IDENTIFIABLE"
@@ -47,7 +58,7 @@ def _derive_state_from_facts(
                 mapped = token
             else:
                 mapped = "PRESENT" if token else "PRESENT"
-            
+
         if state_severity.get(mapped, 2) >= state_severity.get(worst_state, 0):
             worst_state = mapped
 
@@ -66,21 +77,25 @@ def resolve_resource_states(
     resource_states: list[ResourceState] = []
     unverified = 0
 
-    obs_by_res_file: dict[tuple[ResourceKey, str], list[Fact]] = {}
+    obs_by_res: dict[ResourceKey, list[Observation]] = {}
     cat_by_res: dict[ResourceKey, str] = {}
     for obs in observations:
         k = (obs.fact.system_id, obs.fact.resource_id)
-        obs_by_res_file.setdefault((k, obs.fact.file_id), []).append(obs.fact)
+        obs_by_res.setdefault(k, []).append(obs)
         if obs.fact.category and k not in cat_by_res:
             cat_by_res[k] = obs.fact.category
 
     for sys_id, res_id in sorted(resource_set):
         k = (sys_id, res_id)
         prefix = res_id.rsplit("_", 1)[0] if "_" in res_id else res_id
-        
+
         category = cat_by_res.get(k)
         if not category:
-            if "account" in prefix:
+            # Check observation fields for specific categories
+            facts_for_k = [o.fact for o in obs_by_res.get(k, [])]
+            if any("email_opt_in" in f.fields for f in facts_for_k):
+                category = "MARKETING_PROFILE"
+            elif "account" in prefix:
                 category = "USER_PROFILE"
             elif "search" in prefix:
                 category = "SEARCH_INDEX_ENTRY"
@@ -96,49 +111,61 @@ def resolve_resource_states(
                 category = "SECURITY_AUDIT_LOG"
             elif "tombstone" in prefix:
                 category = "ACCOUNT_TOMBSTONE"
+            elif "export" in prefix:
+                category = "USER_EXPORT"
             else:
                 category = "USER_PROFILE"
 
         kind = cat_kinds.get(category, "record")
-        valid_snaps = [c for c in coverage if c.system_id == sys_id and c.captured_at <= audit_at]
 
-        if not valid_snaps:
-            obs_files = [obs.fact.file_id for obs in observations if (obs.fact.system_id, obs.fact.resource_id) == k]
-            if obs_files:
-                winning_file = obs_files[-1]
-                facts = obs_by_res_file.get((k, winning_file), [])
-                st, exposed = _derive_state_from_facts(facts, category, vocab)
-                resource_states.append(
-                    ResourceState(key=k, category=category, kind=kind, state=st, evidence_id=winning_file, exposed_fields=exposed)
-                )
-            else:
-                unverified += 1
-                resource_states.append(
-                    ResourceState(key=k, category=category, kind=kind, state="UNVERIFIED", evidence_id=None)
-                )
-            continue
+        # 1. Directly observed
+        res_obs = obs_by_res.get(k, [])
+        if res_obs:
+            obs_by_file: dict[str, list[Fact]] = {}
+            file_times: dict[str, datetime] = {}
+            for o in res_obs:
+                fid = o.fact.file_id
+                obs_by_file.setdefault(fid, []).append(o.fact)
+                snap_cov = [c for c in coverage if c.file_id == fid]
+                file_times[fid] = snap_cov[0].captured_at if snap_cov else audit_at
 
-        winning_snap = sorted(valid_snaps, key=lambda c: (c.captured_at, c.file_id), reverse=True)[0]
-        winning_file = winning_snap.file_id
-
-        facts = obs_by_res_file.get((k, winning_file), [])
-        if not facts:
-            st = "ABSENT"
-            exposed = []
-        else:
+            winning_file = sorted(obs_by_file.keys(), key=lambda f: (file_times.get(f, audit_at), f), reverse=True)[0]
+            facts = obs_by_file[winning_file]
             st, exposed = _derive_state_from_facts(facts, category, vocab)
 
-        resource_states.append(
-            ResourceState(
-                key=k,
-                category=category,
-                kind=kind,
-                state=st,
-                as_of=winning_snap.captured_at,
-                evidence_id=winning_file,
-                exposed_fields=exposed,
+            resource_states.append(
+                ResourceState(
+                    key=k,
+                    category=category,
+                    kind=kind,
+                    state=st,
+                    as_of=file_times.get(winning_file),
+                    evidence_id=winning_file,
+                    exposed_fields=exposed,
+                )
             )
-        )
+            continue
+
+        # 2. Absence proof from covering snapshot
+        valid_snaps = [c for c in coverage if c.system_id == sys_id and c.captured_at <= audit_at]
+        if valid_snaps:
+            winning_snap = sorted(valid_snaps, key=lambda c: (c.captured_at, c.file_id), reverse=True)[0]
+            resource_states.append(
+                ResourceState(
+                    key=k,
+                    category=category,
+                    kind=kind,
+                    state="ABSENT",
+                    as_of=winning_snap.captured_at,
+                    evidence_id=winning_snap.file_id,
+                    exposed_fields=[],
+                )
+            )
+        else:
+            unverified += 1
+            resource_states.append(
+                ResourceState(key=k, category=category, kind=kind, state="UNVERIFIED", evidence_id=None)
+            )
 
     gate5 = Gate5Result(ok=True, states_count=len(resource_states), unverified_count=unverified)
     return resource_states, gate5
