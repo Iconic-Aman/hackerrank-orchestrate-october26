@@ -1,0 +1,95 @@
+formats:
+  .sql: sql
+  .json: json_snapshots
+  .txt: pipe_table
+  .log: log_lines
+  .pdf: pdf_text
+  .png: image_vision
+csv_roles:
+  identities:
+    user_id: user_id
+    email: email
+    phone: phone
+    name: name
+    email_hash: email_hash
+  audit_log:
+    field_name: field_name
+    old_value: old_value
+    new_value: new_value
+    event_time: event_time
+  activity:
+    activity_id: activity_id
+    event_time: event_time
+    event_type: event_type
+    target_system: target_system
+    resource_id: resource_id
+identifier_kinds:
+  email:
+    normalize:
+    - strip
+    - lower
+    strength: strong
+  phone:
+    normalize:
+    - digits_only
+    strength: strong
+  email_hash:
+    normalize:
+    - strip
+    - lower
+    strength: strong
+  user_id:
+    normalize:
+    - strip
+    strength: strong
+  name:
+    normalize:
+    - casefold
+    - collapse_ws
+    strength: weak
+email_hash:
+  algorithm: sha256
+  input_normalize:
+  - strip
+  - lower
+state_vocab:
+  NOT_FOUND: ABSENT
+  FOUND: PRESENT
+  IDENTIFIABLE: IDENTIFIABLE
+  ACTIVE: ACTIVE
+  ANONYMIZED: ANONYMIZED
+  REDACTED: REDACTED
+  BLOCKED: BLOCKED
+  DISABLED: DISABLED
+resource_system_map:
+  account: account_service
+  analytics: analytics_platform
+  audit_record: security_service
+  backup: backup_service
+  cache: cache_service
+  data_flow: integration_service
+  email_delivery: email_delivery_service
+  export: export_service
+  legal_hold: legal_service
+  marketing: marketing_platform
+  object: object_storage
+  search: search_service
+  support: support_platform
+  tombstone: identity_service
+category_kinds:
+  USER_PROFILE: record
+  SECONDARY_IDENTIFIER: record
+  SEARCH_INDEX_ENTRY: record
+  CACHE_ENTRY: record
+  SUPPORT_MESSAGE: record
+  SUPPORT_ATTACHMENT: record
+  ANALYTICS_PROFILE: record
+  PRODUCT_TELEMETRY: record
+  USER_EXPORT: record
+  MARKETING_PROFILE: record
+  EMAIL_DELIVERY_LOG: record
+  SECURITY_AUDIT_LOG: record
+  LEGAL_HOLD_RECORD: record
+  BACKUP_ARCHIVE: restore_path
+  ACCOUNT_TOMBSTONE: record
+  DATA_FLOW: flow

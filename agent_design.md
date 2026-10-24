@@ -7,7 +7,7 @@
 
 ## 1. The Two Big Rules
 
-### Rule 1 — Test after every step (so nothing is forgotten)
+* [ ] Rule 1 — Test after every step (so nothing is forgotten)
 
 Nothing moves forward until the current step is tested. This applies in two places:
 
@@ -29,14 +29,14 @@ The agent must work on a different company, different systems, different column 
 
 **Where those things must come from instead:**
 
-| Source | What it supplies |
-|--------|------------------|
-| **Dataset files** | Users, identifiers, rules, activity, evidence manifest |
-| **`config/operations.yaml`** | Allowed operations, phase, state, remediation → verification mapping, sort order |
-| **`config/parsers.yaml`** | File type → parser |
-| **`config/thresholds.yaml`** | Confidence limits, retries, batch sizes |
-| **`config/schema_map.generated.yaml`** | Written by S0 after profiling the data. Reviewed by a human |
-| **`code/prompts/*.md`** | Prompt text, versioned |
+| Source                                         | What it supplies                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Dataset files**                        | Users, identifiers, rules, activity, evidence manifest                            |
+| **`config/operations.yaml`**           | Allowed operations, phase, state, remediation → verification mapping, sort order |
+| **`config/parsers.yaml`**              | File type → parser                                                               |
+| **`config/thresholds.yaml`**           | Confidence limits, retries, batch sizes                                           |
+| **`config/schema_map.generated.yaml`** | Written by S0 after profiling the data. Reviewed by a human                       |
+| **`code/prompts/*.md`**                | Prompt text, versioned                                                            |
 
 > Config files are fine because they are data, not logic. A new dataset means new config, not new code.
 
@@ -95,15 +95,15 @@ Each stage lists: **Purpose · Input → Output · Method · Gate · Edge cases*
 
 ### Shared data models (Pydantic)
 
-| Model | Fields (logical) |
-|-------|------------------|
-| `Identifier` | value, kind (email / phone / name / email_hash / user_id), source (identity row or audit id), valid_from, valid_to |
-| `Observation` | system_id, resource_id, category, exposed_identifiers, exposed_fields, evidence_id, observed_at, confidence |
-| `Flow` | flow_id, source_system, target_system, is_active, covers_user, evidence_id |
-| `RestorePath` | backup_id, covers_user, is_blocked, evidence_id |
-| `RequiredTreatment` | category, treatment, allowed_fields, retention_rule |
-| `Finding` | resource key, operation, state, evidence_id, reason |
-| `Step` | step_no, phase, system_id, resource_id, operation, state, evidence_id |
+| Model                 | Fields (logical)                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `Identifier`        | value, kind (email / phone / name / email_hash / user_id), source (identity row or audit id), valid_from, valid_to |
+| `Observation`       | system_id, resource_id, category, exposed_identifiers, exposed_fields, evidence_id, observed_at, confidence        |
+| `Flow`              | flow_id, source_system, target_system, is_active, covers_user, evidence_id                                         |
+| `RestorePath`       | backup_id, covers_user, is_blocked, evidence_id                                                                    |
+| `RequiredTreatment` | category, treatment, allowed_fields, retention_rule                                                                |
+| `Finding`           | resource key, operation, state, evidence_id, reason                                                                |
+| `Step`              | step_no, phase, system_id, resource_id, operation, state, evidence_id                                              |
 
 > Logical names only. Real column names are discovered in S0 and stored in `schema_map.generated.yaml`.
 
@@ -171,15 +171,15 @@ Each stage lists: **Purpose · Input → Output · Method · Gate · Edge cases*
 - **Input → Output:** required treatments + states → `Finding` list.
 - **Method:** Code. Decision table per resource:
 
-| Required | Actual | Result |
-|----------|--------|--------|
-| DELETE | PRESENT | `REPORT_REMAINING_RECORD` |
-| DELETE | ABSENT | Satisfied → verification only |
-| REDACT / ANONYMIZE / RETAIN-with-limits | Contains disallowed identifiers | `REPORT_EXPOSED_PII` |
-| RETAIN | ABSENT | Retention violated (see P6) |
-| Flow must be off | ACTIVE and covers user | `REPORT_ACTIVE_DATA_FLOW` |
-| Restore must be blocked | ACTIVE and covers user | `REPORT_RESTORE_RISK` |
-| any | UNVERIFIED | Review flag. Never counted as satisfied |
+| Required                                | Actual                          | Result                                  |
+| --------------------------------------- | ------------------------------- | --------------------------------------- |
+| DELETE                                  | PRESENT                         | `REPORT_REMAINING_RECORD`             |
+| DELETE                                  | ABSENT                          | Satisfied → verification only          |
+| REDACT / ANONYMIZE / RETAIN-with-limits | Contains disallowed identifiers | `REPORT_EXPOSED_PII`                  |
+| RETAIN                                  | ABSENT                          | Retention violated (see P6)             |
+| Flow must be off                        | ACTIVE and covers user          | `REPORT_ACTIVE_DATA_FLOW`             |
+| Restore must be blocked                 | ACTIVE and covers user          | `REPORT_RESTORE_RISK`                 |
+| any                                     | UNVERIFIED                      | Review flag. Never counted as satisfied |
 
 - **Gate 7:** Every finding maps to one row of the table above. Every active flow and restore path found in S5 is either a finding or has a written reason why not.
 - **Edge cases:** F1–F7, P6.
@@ -214,13 +214,13 @@ Each stage lists: **Purpose · Input → Output · Method · Gate · Edge cases*
 
 ## 5. LLM Usage Policy
 
-| Task | LLM? | Why |
-|------|------|-----|
-| Classify request text | Yes | Free-form language |
-| Read screenshots (admin consoles, dashboards, search indexes) | Yes (vision) | No other way |
-| Read PDFs when text extraction fails or is ambiguous | Yes | Layout-heavy documents |
-| Parse unstructured log lines the config parsers cannot handle | Yes, once, then cache | Messy formats |
-| Identity resolution, timeline, policy, comparison, status, ordering | **No** | Must be exact and repeatable |
+| Task                                                                | LLM?                  | Why                          |
+| ------------------------------------------------------------------- | --------------------- | ---------------------------- |
+| Classify request text                                               | Yes                   | Free-form language           |
+| Read screenshots (admin consoles, dashboards, search indexes)       | Yes (vision)          | No other way                 |
+| Read PDFs when text extraction fails or is ambiguous                | Yes                   | Layout-heavy documents       |
+| Parse unstructured log lines the config parsers cannot handle       | Yes, once, then cache | Messy formats                |
+| Identity resolution, timeline, policy, comparison, status, ordering | **No**          | Must be exact and repeatable |
 
 LLM rules:
 
@@ -258,12 +258,12 @@ LLM rules:
 
 ## 8. Configuration Files
 
-| File | Holds |
-|------|-------|
-| `operations.yaml` | operation name, phase, state, order index, treatment it implements, verification partner, strength rank |
-| `parsers.yaml` | file extension / type → parser function name |
-| `thresholds.yaml` | LLM confidence limit, retries, backoff, batch size |
-| `schema_map.generated.yaml` | Frozen output of S0: column roles, SQL identifier columns, hash algorithm, time formats |
+| File                          | Holds                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `operations.yaml`           | operation name, phase, state, order index, treatment it implements, verification partner, strength rank |
+| `parsers.yaml`              | file extension / type → parser function name                                                           |
+| `thresholds.yaml`           | LLM confidence limit, retries, backoff, batch size                                                      |
+| `schema_map.generated.yaml` | Frozen output of S0: column roles, SQL identifier columns, hash algorithm, time formats                 |
 
 Prompts live in `code/prompts/`, one file per LLM task, each with a version string.
 
@@ -307,16 +307,16 @@ This is the part that stops the build from drifting. **Follow it for every stage
 
 ### Make targets
 
-| Command | Does |
-|---------|------|
-| `make test` | All unit tests |
-| `make test-stage S=2` | Tests for one stage |
-| `make gate S=2` | Gate tests with deliberately bad input |
-| `make golden` | Run samples, diff vs `sample_output.csv` |
-| `make guard` | Hardcoded-literal scan |
-| `make mutate` | Mutation tests |
-| `make eval` | Everything above + writes `evaluation_report.md` |
-| `make run` | Full 518-case run → `output.csv` |
+| Command                 | Does                                               |
+| ----------------------- | -------------------------------------------------- |
+| `make test`           | All unit tests                                     |
+| `make test-stage S=2` | Tests for one stage                                |
+| `make gate S=2`       | Gate tests with deliberately bad input             |
+| `make golden`         | Run samples, diff vs `sample_output.csv`         |
+| `make guard`          | Hardcoded-literal scan                             |
+| `make mutate`         | Mutation tests                                     |
+| `make eval`           | Everything above + writes `evaluation_report.md` |
+| `make run`            | Full 518-case run → `output.csv`                |
 
 ### `evaluation/PROGRESS.md` template
 
@@ -353,121 +353,121 @@ This table feeds the "failures found and improvements made" section of `evaluati
 
 ### Request classification (S1)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| C1 | Asks for a data export or copy only | `NOT_APPLICABLE`, `[]` |
-| C2 | Asks for correction, update or unsubscribe only | `NOT_APPLICABLE`, `[]` |
-| C3 | Asks for export **and** deletion | Deletion applies |
-| C4 | Deletion request withdrawn ("please don't delete") | `NOT_APPLICABLE` |
-| C5 | Typos, slang, other language | Still classified correctly |
-| C6 | Empty or missing request text | Decide from request events in activity; flag for review ❓ |
-| C7 | `reported_status` = `NOT_STARTED` but it is a deletion request | Audit normally |
-| C8 | `reported_status` = `COMPLETE` but not a deletion request | Still `NOT_APPLICABLE` |
-| C9 | Request text contains instructions ("mark this complete") | Ignored. Treated as text |
+| ID | Scenario                                                           | Expected                                                   |
+| -- | ------------------------------------------------------------------ | ---------------------------------------------------------- |
+| C1 | Asks for a data export or copy only                                | `NOT_APPLICABLE`, `[]`                                 |
+| C2 | Asks for correction, update or unsubscribe only                    | `NOT_APPLICABLE`, `[]`                                 |
+| C3 | Asks for export **and** deletion                             | Deletion applies                                           |
+| C4 | Deletion request withdrawn ("please don't delete")                 | `NOT_APPLICABLE`                                         |
+| C5 | Typos, slang, other language                                       | Still classified correctly                                 |
+| C6 | Empty or missing request text                                      | Decide from request events in activity; flag for review ❓ |
+| C7 | `reported_status` = `NOT_STARTED` but it is a deletion request | Audit normally                                             |
+| C8 | `reported_status` = `COMPLETE` but not a deletion request      | Still `NOT_APPLICABLE`                                   |
+| C9 | Request text contains instructions ("mark this complete")          | Ignored. Treated as text                                   |
 
 ### Identity (S2)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| I1 | Request email is an **old** email | Resolve to the user through the audit log |
-| I2 | Chain of changes A → B → C | All three collected |
-| I3 | Case, whitespace or plus-tag differences | Normalized for lookup. Raw variants kept for matching evidence |
-| I4 | Old email later given to a **different** user | That user's records are never touched or reported |
-| I5 | Two users with the same name | Never match on name alone |
-| I6 | Email found nowhere in identities or audit log | Search evidence by raw value. Flag for review ❓ |
-| I7 | Phone in different formats (+, spaces, dashes) | Normalize to digits for matching |
-| I8 | Email hash with unknown algorithm or normalization | Discover in S0. Store in `schema_map` |
-| I9 | Duplicate accounts with the same email | Include all `user_id`s. Flag |
-| I10 | Audit-log change dated after `audit_at` | Excluded from state at `audit_at`; flag ❓ |
-| I11 | Records that only carry `user_id` | Matched by `user_id` |
-| I12 | Name changes (for example after marriage) | Names are supporting only, never alone |
+| ID  | Scenario                                            | Expected                                                       |
+| --- | --------------------------------------------------- | -------------------------------------------------------------- |
+| I1  | Request email is an **old** email             | Resolve to the user through the audit log                      |
+| I2  | Chain of changes A → B → C                        | All three collected                                            |
+| I3  | Case, whitespace or plus-tag differences            | Normalized for lookup. Raw variants kept for matching evidence |
+| I4  | Old email later given to a **different** user | That user's records are never touched or reported              |
+| I5  | Two users with the same name                        | Never match on name alone                                      |
+| I6  | Email found nowhere in identities or audit log      | Search evidence by raw value. Flag for review ❓               |
+| I7  | Phone in different formats (+, spaces, dashes)      | Normalize to digits for matching                               |
+| I8  | Email hash with unknown algorithm or normalization  | Discover in S0. Store in `schema_map`                        |
+| I9  | Duplicate accounts with the same email              | Include all `user_id`s. Flag                                 |
+| I10 | Audit-log change dated after `audit_at`           | Excluded from state at `audit_at`; flag ❓                   |
+| I11 | Records that only carry `user_id`                 | Matched by `user_id`                                         |
+| I12 | Name changes (for example after marriage)           | Names are supporting only, never alone                         |
 
 ### Evidence (S3, S4)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| V1 | SQL snapshots have different schemas, renamed columns | Schema discovery, no assumed column names |
-| V2 | Personal data inside free-text or JSON cells | Scanned and found |
-| V3 | Masked values (`j***@mail.com`) | Not exposure unless policy or re-identification says so. Low confidence → flag |
-| V4 | Hashed email in analytics | Counts as exposure if the rule lists email hash |
-| V5 | Snapshot taken after `audit_at`, or older than a newer snapshot of the same system | Use the right snapshot by time. Ignore stale ones |
-| V6 | Replica still has the record while primary does not | Replica is its own resource. Finding |
-| V7 | Corrupt, empty, locked or unreadable file | `UNVERIFIED`. Flag. Never treated as absent |
-| V8 | Blurry image or OCR errors | Quote check + confidence. Low confidence → flag |
-| V9 | Same record in multiple files | Dedupe by system and resource. Cite the right evidence |
-| V10 | File in manifest but missing on disk, or on disk but not in manifest | Reported in run summary |
-| V11 | Very large logs | Streamed |
-| V12 | Mixed timestamp formats and time zones | Everything converted to UTC |
-| V13 | Tombstone record with only `user_id` | Allowed. Check that direct identifiers are gone |
-| V14 | A system the rules cover has no evidence at all | `UNVERIFIED`. Cannot be counted as complete ❓ |
+| ID  | Scenario                                                                             | Expected                                                                        |
+| --- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| V1  | SQL snapshots have different schemas, renamed columns                                | Schema discovery, no assumed column names                                       |
+| V2  | Personal data inside free-text or JSON cells                                         | Scanned and found                                                               |
+| V3  | Masked values (`j***@mail.com`)                                                    | Not exposure unless policy or re-identification says so. Low confidence → flag |
+| V4  | Hashed email in analytics                                                            | Counts as exposure if the rule lists email hash                                 |
+| V5  | Snapshot taken after `audit_at`, or older than a newer snapshot of the same system | Use the right snapshot by time. Ignore stale ones                               |
+| V6  | Replica still has the record while primary does not                                  | Replica is its own resource. Finding                                            |
+| V7  | Corrupt, empty, locked or unreadable file                                            | `UNVERIFIED`. Flag. Never treated as absent                                   |
+| V8  | Blurry image or OCR errors                                                           | Quote check + confidence. Low confidence → flag                                |
+| V9  | Same record in multiple files                                                        | Dedupe by system and resource. Cite the right evidence                          |
+| V10 | File in manifest but missing on disk, or on disk but not in manifest                 | Reported in run summary                                                         |
+| V11 | Very large logs                                                                      | Streamed                                                                        |
+| V12 | Mixed timestamp formats and time zones                                               | Everything converted to UTC                                                     |
+| V13 | Tombstone record with only `user_id`                                               | Allowed. Check that direct identifiers are gone                                 |
+| V14 | A system the rules cover has no evidence at all                                      | `UNVERIFIED`. Cannot be counted as complete ❓                                |
 
 ### State & timeline (S5)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| T1 | Delete event "success" but record present | Evidence wins. Finding |
-| T2 | Delete event "failed" but record absent | Absent |
-| T3 | Record deleted, then recreated by a sync before `audit_at` | Present. Finding |
-| T4 | Sync disabled before `audit_at` | Not active. Verification cites the disabling evidence |
-| T5 | Job enabled and disabled several times | Last state at or before `audit_at` |
-| T6 | Events after `audit_at` | Ignored |
-| T7 | Events with identical timestamps | Stable tie-break by id |
-| T8 | Restore scheduled in the future vs already run | Handled by time relative to `audit_at` |
-| T9 | Backup already expired or deleted | No restore risk |
-| T10 | Data already exported to a destination | Treated by the rule for that category ❓ |
-| T11 | Activity row cites a different resource than evidence shows | Trust evidence. Log conflict |
+| ID  | Scenario                                                     | Expected                                              |
+| --- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| T1  | Delete event "success" but record present                    | Evidence wins. Finding                                |
+| T2  | Delete event "failed" but record absent                      | Absent                                                |
+| T3  | Record deleted, then recreated by a sync before `audit_at` | Present. Finding                                      |
+| T4  | Sync disabled before `audit_at`                            | Not active. Verification cites the disabling evidence |
+| T5  | Job enabled and disabled several times                       | Last state at or before `audit_at`                  |
+| T6  | Events after `audit_at`                                    | Ignored                                               |
+| T7  | Events with identical timestamps                             | Stable tie-break by id                                |
+| T8  | Restore scheduled in the future vs already run               | Handled by time relative to `audit_at`              |
+| T9  | Backup already expired or deleted                            | No restore risk                                       |
+| T10 | Data already exported to a destination                       | Treated by the rule for that category ❓              |
+| T11 | Activity row cites a different resource than evidence shows  | Trust evidence. Log conflict                          |
 
 ### Policy (S6)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| P1 | Category missing from the rules file | `UNMAPPED_CATEGORY` flag. No guessed treatment |
-| P2 | Retained category (for example audit or legal records) | Verify the record is present. Check no disallowed identifiers |
-| P3 | Account tombstone | Keep `user_id`. Name, email, phone and email hash must be gone |
-| P4 | Retention period in the rule | Compare to `audit_at` ❓ |
-| P5 | Several rules could apply | Most specific rule wins. Documented in config |
-| P6 | Required record has been deleted by mistake | `INCOMPLETE` with a finding. Exact operation ❓ |
-| P7 | Needs `REDACT` but record is already `ANONYMIZED` | Stronger treatment satisfies weaker (rank in config) |
+| ID | Scenario                                               | Expected                                                         |
+| -- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| P1 | Category missing from the rules file                   | `UNMAPPED_CATEGORY` flag. No guessed treatment                 |
+| P2 | Retained category (for example audit or legal records) | Verify the record is present. Check no disallowed identifiers    |
+| P3 | Account tombstone                                      | Keep `user_id`. Name, email, phone and email hash must be gone |
+| P4 | Retention period in the rule                           | Compare to `audit_at` ❓                                       |
+| P5 | Several rules could apply                              | Most specific rule wins. Documented in config                    |
+| P6 | Required record has been deleted by mistake            | `INCOMPLETE` with a finding. Exact operation ❓                |
+| P7 | Needs `REDACT` but record is already `ANONYMIZED`  | Stronger treatment satisfies weaker (rank in config)             |
 
 ### Flows & restore (S5, S7)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| F1 | Active sync from a cleaned system to another | `REPORT_ACTIVE_DATA_FLOW`, then disable and verify |
-| F2 | Inactive flow with old config still present | No finding |
-| F3 | Flow that only touches other users | Ignored |
-| F4 | Flow with a broad source (all users) | Counts, it includes this user |
-| F5 | Chained flows A → B → C | Report every active flow that can recreate the user's data ❓ |
-| F6 | Backup older than the deletion | `REPORT_RESTORE_RISK` unless blocked |
-| F7 | Several backups, some blocked and some not | One finding per unblocked backup |
+| ID | Scenario                                     | Expected                                                      |
+| -- | -------------------------------------------- | ------------------------------------------------------------- |
+| F1 | Active sync from a cleaned system to another | `REPORT_ACTIVE_DATA_FLOW`, then disable and verify          |
+| F2 | Inactive flow with old config still present  | No finding                                                    |
+| F3 | Flow that only touches other users           | Ignored                                                       |
+| F4 | Flow with a broad source (all users)         | Counts, it includes this user                                 |
+| F5 | Chained flows A → B → C                    | Report every active flow that can recreate the user's data ❓ |
+| F6 | Backup older than the deletion               | `REPORT_RESTORE_RISK` unless blocked                        |
+| F7 | Several backups, some blocked and some not   | One finding per unblocked backup                              |
 
 ### Output (S9, S10)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| O1 | Sort ties and number-like ids (`id_10` vs `id_2`) | Plain ascending string order. Confirm against samples ❓ |
-| O2 | Duplicate steps | Removed |
-| O3 | `step_no` | Starts at 1 for each case, no gaps |
-| O4 | Empty evidence id format (`""` vs null) | Match `sample_output.csv` ❓ |
-| O5 | `NOT_APPLICABLE` | Exactly `[]` |
-| O6 | `COMPLETE` | Verification only. Evidence id on every step. Includes `VERIFY_RECORD_PRESENT` for retained records |
-| O7 | JSON with commas and quotes in CSV | Correct CSV quoting. UTF-8 |
-| O8 | Duplicate or missing `case_id` in input | Flag. Output still one row per unique case, sorted |
-| O9 | Remediation without a matching verification | Gate 9 fails |
+| ID | Scenario                                              | Expected                                                                                              |
+| -- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| O1 | Sort ties and number-like ids (`id_10` vs `id_2`) | Plain ascending string order. Confirm against samples ❓                                              |
+| O2 | Duplicate steps                                       | Removed                                                                                               |
+| O3 | `step_no`                                           | Starts at 1 for each case, no gaps                                                                    |
+| O4 | Empty evidence id format (`""` vs null)             | Match `sample_output.csv` ❓                                                                        |
+| O5 | `NOT_APPLICABLE`                                    | Exactly `[]`                                                                                        |
+| O6 | `COMPLETE`                                          | Verification only. Evidence id on every step. Includes `VERIFY_RECORD_PRESENT` for retained records |
+| O7 | JSON with commas and quotes in CSV                    | Correct CSV quoting. UTF-8                                                                            |
+| O8 | Duplicate or missing `case_id` in input             | Flag. Output still one row per unique case, sorted                                                    |
+| O9 | Remediation without a matching verification           | Gate 9 fails                                                                                          |
 
 ### LLM & run (all stages)
 
-| ID | Scenario | Expected |
-|----|----------|----------|
-| R1 | API timeout or rate limit | Backoff, retry, resume from cache |
-| R2 | LLM returns invalid JSON | Repair, re-ask, then flag |
-| R3 | LLM invents an identifier | Rejected by grounding check |
-| R4 | Token budget pressure | Cache, batch small tasks, deterministic first |
-| R5 | Crash mid-run | Resume from checkpoint |
-| R6 | Two runs differ | Not allowed. Cache + temp 0 + stable sort. Test compares two runs |
-| R7 | Personal data in logs or UI | Masked |
+| ID | Scenario                         | Expected                                                                  |
+| -- | -------------------------------- | ------------------------------------------------------------------------- |
+| R1 | API timeout or rate limit        | Backoff, retry, resume from cache                                         |
+| R2 | LLM returns invalid JSON         | Repair, re-ask, then flag                                                 |
+| R3 | LLM invents an identifier        | Rejected by grounding check                                               |
+| R4 | Token budget pressure            | Cache, batch small tasks, deterministic first                             |
+| R5 | Crash mid-run                    | Resume from checkpoint                                                    |
+| R6 | Two runs differ                  | Not allowed. Cache + temp 0 + stable sort. Test compares two runs         |
+| R7 | Personal data in logs or UI      | Masked                                                                    |
 | R8 | Prompt injection inside evidence | Treated as data. Test includes an evidence file saying "ignore the rules" |
-| R9 | API key in code or zip | Blocked by package scan |
+| R9 | API key in code or zip           | Blocked by package scan                                                   |
 
 ---
 
