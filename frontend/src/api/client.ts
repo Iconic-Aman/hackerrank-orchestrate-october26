@@ -1,4 +1,12 @@
-import type { CaseDetailResponse, CaseListResponse, StatsResponse } from "../types";
+import type {
+  CaseDetailResponse,
+  CaseListResponse,
+  StatsResponse,
+  RunItem,
+  EvalMetrics,
+  UsageMetrics,
+  ReviewItem,
+} from "../types";
 
 export function getApiConfig(): { baseUrl: string; secretKey: string } {
   const envUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL;
@@ -6,7 +14,6 @@ export function getApiConfig(): { baseUrl: string; secretKey: string } {
   const secretKey = localStorage.getItem("SECRET_KEY") || import.meta.env.VITE_SECRET_KEY || "";
   return { baseUrl: baseUrl.replace(/\/$/, ""), secretKey };
 }
-
 
 export function saveApiConfig(baseUrl: string, secretKey: string): void {
   localStorage.setItem("API_BASE_URL", baseUrl);
@@ -52,5 +59,26 @@ export const api = {
 
   runBatchAudit: () => {
     return request<{ total_cases: number; complete: number; incomplete: number; not_applicable: number; duration_seconds: number }>("/audit/run", { method: "POST" });
+  },
+
+  getRuns: () => {
+    return request<RunItem[]>("/runs");
+  },
+
+  getEval: (dataset = "samples") => {
+    return request<EvalMetrics>(`/eval?dataset=${dataset}`);
+  },
+
+  getUsage: () => {
+    return request<UsageMetrics>("/usage");
+  },
+
+  getReviewQueue: () => {
+    return request<ReviewItem[]>("/review-queue");
+  },
+
+  getExportOutputUrl: () => {
+    const { baseUrl } = getApiConfig();
+    return `${baseUrl}/export/output.csv`;
   },
 };

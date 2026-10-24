@@ -2,18 +2,34 @@ import React from "react";
 import { Settings, RefreshCw } from "lucide-react";
 
 interface HeaderProps {
+  activeTab: string;
+  onTabChange: (tab: string) => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onRefresh, isRefreshing }) => {
+const TABS = [
+  { id: "runs", label: "Runs" },
+  { id: "cases", label: "Cases" },
+  { id: "review", label: "Review Queue" },
+  { id: "eval", label: "Evaluation" },
+  { id: "usage", label: "Token Usage" },
+];
+
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  onTabChange,
+  onOpenSettings,
+  onRefresh,
+  isRefreshing,
+}) => {
   return (
     <header style={{
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: "20px 32px",
+      padding: "16px 32px",
       borderBottom: "1px solid var(--border-soft)",
       backdropFilter: "blur(12px)",
       position: "sticky",
@@ -35,19 +51,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onRefresh, isRef
         </span>
       </div>
 
+      <nav style={{ display: "flex", gap: "8px" }}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`liquid-pill ${activeTab === t.id ? "active" : ""}`}
+            onClick={() => onTabChange(t.id)}
+            style={{ height: "32px", fontSize: "12.5px" }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <button
           className="liquid-pill"
           onClick={onRefresh}
           disabled={isRefreshing}
-          style={{ cursor: isRefreshing ? "wait" : "pointer" }}
+          style={{ height: "32px", fontSize: "12.5px" }}
         >
-          <RefreshCw size={14} className={isRefreshing ? "spin" : ""} />
-          <span>{isRefreshing ? "Auditing..." : "Sync"}</span>
+          <RefreshCw size={13} className={isRefreshing ? "spin" : ""} />
+          <span>{isRefreshing ? "Syncing..." : "Sync"}</span>
         </button>
 
-        <button className="btn-ghost" onClick={onOpenSettings}>
-          <Settings size={15} />
+        <button className="btn-ghost" onClick={onOpenSettings} style={{ height: "32px", fontSize: "12.5px" }}>
+          <Settings size={14} />
           <span>API Key</span>
         </button>
       </div>

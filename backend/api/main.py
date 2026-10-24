@@ -22,6 +22,7 @@ app.add_middleware(
 
 from fastapi import Depends
 from backend.api.auth import verify_token
+from backend.api.routes.analytics import router as analytics_router
 from backend.api.routes.audit import router as audit_router
 from backend.api.routes.cases import router as cases_router
 from backend.api.routes.stats import router as stats_router
@@ -29,6 +30,8 @@ from backend.api.routes.stats import router as stats_router
 app.include_router(cases_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
 app.include_router(stats_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
 app.include_router(audit_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
+app.include_router(analytics_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
+
 
 class HealthResponse(BaseModel):
     status: str
