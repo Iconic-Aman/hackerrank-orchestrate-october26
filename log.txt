@@ -474,3 +474,25 @@ repo_root=d:\ASSIGNMENT\hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
 
+## [2026-10-25T01:08:00Z] Added Bearer authentication using SECRET_KEY env variable
+
+User Prompt (verbatim, secrets redacted):
+Before that you need to make sure api is authenticated , so  you haev to setup a bearre authenticateion for all apis and the key is os.getenv('SECRET_KEY') , use it , don't touch .env
+
+Agent Response Summary:
+Created backend/api/auth.py enforcing HTTP Bearer token matching os.getenv('SECRET_KEY'). Applied dependency across all /api/v1 routes while leaving /health public for deployment probes. Updated unit tests to verify 401 on missing/invalid tokens and successful access with valid token. Did not touch .env.
+
+Actions:
+* Created backend/api/auth.py
+* Updated backend/api/main.py
+* Updated backend/tests/unit/test_api_routes.py
+* Executed pytest on test_api_routes.py (8 passed)
+
+Context:
+tool=Antigravity
+model=gemini-3.8-flash-high
+branch=main
+repo_root=d:\ASSIGNMENT\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
