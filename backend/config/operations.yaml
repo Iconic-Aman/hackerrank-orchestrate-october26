@@ -1,0 +1,111 @@
+phases:
+  - FINDING
+  - REMEDIATION
+  - VERIFICATION
+
+operations:
+  REPORT_REMAINING_RECORD:
+    phase: FINDING
+    state: PRESENT
+    order: 1
+  REPORT_EXPOSED_PII:
+    phase: FINDING
+    state: PRESENT
+    order: 2
+  REPORT_ACTIVE_DATA_FLOW:
+    phase: FINDING
+    state: ACTIVE
+    order: 3
+  REPORT_RESTORE_RISK:
+    phase: FINDING
+    state: ACTIVE
+    order: 4
+  DISABLE_DATA_FLOW:
+    phase: REMEDIATION
+    state: DISABLED
+    order: 1
+  BLOCK_RESTORE:
+    phase: REMEDIATION
+    state: BLOCKED
+    order: 2
+  DELETE_RECORD:
+    phase: REMEDIATION
+    state: ABSENT
+    order: 3
+  REDACT_RECORD:
+    phase: REMEDIATION
+    state: REDACTED
+    order: 4
+  ANONYMIZE_RECORD:
+    phase: REMEDIATION
+    state: ANONYMIZED
+    order: 5
+  VERIFY_RECORD_ABSENT:
+    phase: VERIFICATION
+    state: ABSENT
+    order: 1
+  VERIFY_RECORD_PRESENT:
+    phase: VERIFICATION
+    state: PRESENT
+    order: 2
+  VERIFY_RECORD_REDACTED:
+    phase: VERIFICATION
+    state: REDACTED
+    order: 3
+  VERIFY_RECORD_ANONYMIZED:
+    phase: VERIFICATION
+    state: ANONYMIZED
+    order: 4
+  VERIFY_DATA_FLOW_DISABLED:
+    phase: VERIFICATION
+    state: DISABLED
+    order: 5
+  VERIFY_RESTORE_BLOCKED:
+    phase: VERIFICATION
+    state: BLOCKED
+    order: 6
+
+treatments:
+  - kind: record
+    action: DELETE
+    target: ABSENT
+    finding: REPORT_REMAINING_RECORD
+    fix: DELETE_RECORD
+    verify: VERIFY_RECORD_ABSENT
+  - kind: record
+    action: REDACT
+    target: REDACTED
+    finding: REPORT_EXPOSED_PII
+    fix: REDACT_RECORD
+    verify: VERIFY_RECORD_REDACTED
+  - kind: record
+    action: ANONYMIZE
+    target: ANONYMIZED
+    finding: REPORT_EXPOSED_PII
+    fix: ANONYMIZE_RECORD
+    verify: VERIFY_RECORD_ANONYMIZED
+  - kind: record
+    action: RETAIN
+    target: PRESENT
+    finding: null
+    fix: null
+    verify: VERIFY_RECORD_PRESENT
+  - kind: flow
+    action: "*"
+    target: DISABLED
+    finding: REPORT_ACTIVE_DATA_FLOW
+    fix: DISABLE_DATA_FLOW
+    verify: VERIFY_DATA_FLOW_DISABLED
+  - kind: restore_path
+    action: "*"
+    target: BLOCKED
+    finding: REPORT_RESTORE_RISK
+    fix: BLOCK_RESTORE
+    verify: VERIFY_RESTORE_BLOCKED
+
+strength:
+  REDACTED: 1
+  ANONYMIZED: 2
+  ABSENT: 3
+
+evidence_id_empty: ""
