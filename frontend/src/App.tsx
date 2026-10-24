@@ -21,13 +21,15 @@ export const App: React.FC = () => {
   const [caseDetail, setCaseDetail] = useState<CaseDetailResponse | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
       const data = await api.getStats();
       setStats(data);
-    } catch (e) {
-      console.error("Failed to load stats:", e);
+      setConnectionError(null);
+    } catch {
+      setConnectionError("Backend unreachable on 127.0.0.1:8000. Start local server or click 'API Key' to set your Render URL.");
     }
   }, []);
 
@@ -37,12 +39,14 @@ export const App: React.FC = () => {
       const res = await api.getCases(0, 50, search || undefined, statusFilter || undefined);
       setCases(res.cases);
       setTotalCases(res.total);
-    } catch (e) {
-      console.error("Failed to load cases:", e);
+      setConnectionError(null);
+    } catch {
+      setConnectionError("Backend unreachable on 127.0.0.1:8000. Start local server or click 'API Key' to set your Render URL.");
     } finally {
       setLoadingCases(false);
     }
   }, [search, statusFilter]);
+
 
   useEffect(() => {
     loadStats();
@@ -104,6 +108,28 @@ export const App: React.FC = () => {
         onRefresh={handleRefresh}
         isRefreshing={refreshing}
       />
+
+      {connectionError && (
+        <div style={{
+          maxWidth: "1200px",
+          margin: "16px auto 0",
+          padding: "12px 20px",
+          background: "rgba(239, 68, 68, 0.15)",
+          border: "1px solid rgba(239, 68, 68, 0.4)",
+          borderRadius: "8px",
+          fontSize: "13px",
+          color: "#fca5a5",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}>
+          <span>{connectionError}</span>
+          <button className="btn-solid" onClick={() => setIsSettingsOpen(true)} style={{ height: "28px", fontSize: "12px", padding: "0 10px" }}>
+            Configure URL
+          </button>
+        </div>
+      )}
+
 
       <HeroStats
         stats={stats}

@@ -546,3 +546,31 @@ repo_root=d:\ASSIGNMENT\hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
 
+## [2026-10-25T02:26:30Z] Diagnosed ECONNREFUSED and added connection error handling
+
+User Prompt (verbatim, secrets redacted):
+TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+2:13:18 AM [vite] http proxy error: /api/v1/stats
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+2:13:18 AM [vite] http proxy error: /api/v1/cases?offset=0&limit=50
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+what is this error, can you fix it ?
+
+Agent Response Summary:
+Diagnosed ECONNREFUSED: the frontend dev proxy attempts to contact http://127.0.0.1:8000 where the backend server is not yet running. Provided instructions to either start the local FastAPI server or configure the deployed Render backend URL in the dashboard settings. Added visual connection error banner in App.tsx.
+
+Actions:
+* Updated frontend/src/App.tsx with connection error banner
+* Tested build with npm run build (passed)
+* Logged turn in log.txt
+
+Context:
+tool=Antigravity
+model=gemini-3.8-flash-high
+branch=main
+repo_root=d:\ASSIGNMENT\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
