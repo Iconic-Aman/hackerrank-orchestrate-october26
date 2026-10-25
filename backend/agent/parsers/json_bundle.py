@@ -18,7 +18,7 @@ def parse_json_bundle(
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 1. Standard snapshots bundle (e.g. evidence_51)
+    # 1. Standard snapshots bundle (e.g. evidence_51, evidence_02)
     if isinstance(data, dict) and "snapshots" in data:
         for s_idx, snap in enumerate(data.get("snapshots", [])):
             system_id = snap.get("data_store", "unknown_system")
@@ -30,7 +30,7 @@ def parse_json_bundle(
                 Coverage(file_id=file_id, system_id=system_id, collection=collection, captured_at=cap_time, row_count=len(records))
             )
             for r_idx, rec in enumerate(records):
-                facts.append(_build_fact(rec, file_id, system_id, collection, f"snapshots[{s_idx}].records[{r_idx}]", sys_map))
+                facts.append(_build_fact(rec, file_id, system_id, collection, f"snapshots[{s_idx}].records[{r_idx}]", sys_map, cap_time))
 
     # 2. Service exports bundle (e.g. evidence_92)
     elif isinstance(data, dict) and "service_exports" in data:
@@ -44,7 +44,7 @@ def parse_json_bundle(
                             Coverage(file_id=file_id, system_id=system_id, collection=coll_name, captured_at=cap_time, row_count=len(records))
                         )
                         for r_idx, rec in enumerate(records):
-                            facts.append(_build_fact(rec, file_id, system_id, coll_name, f"{system_id}.{coll_name}[{r_idx}]", sys_map))
+                            facts.append(_build_fact(rec, file_id, system_id, coll_name, f"{system_id}.{coll_name}[{r_idx}]", sys_map, cap_time))
 
     # 3. Top-level records format (e.g. evidence_56, evidence_59)
     elif isinstance(data, dict) and "records" in data:
@@ -62,7 +62,7 @@ def parse_json_bundle(
             Coverage(file_id=file_id, system_id=system_id, collection=coll_name, captured_at=cap_time, row_count=len(records))
         )
         for r_idx, rec in enumerate(records):
-            facts.append(_build_fact(rec, file_id, system_id, coll_name, f"records[{r_idx}]", sys_map))
+            facts.append(_build_fact(rec, file_id, system_id, coll_name, f"records[{r_idx}]", sys_map, cap_time))
 
     return facts, coverage
 
@@ -74,11 +74,21 @@ def _parse_time(t_str: str | None, default_time: datetime | None) -> datetime:
             pass
     return default_time or datetime.now()
 
-def _build_fact(rec: dict, file_id: str, system_id: str, collection: str, locator: str, sys_map: dict[str, str]) -> Fact:
+def _build_fact(
+    rec: dict,
+    file_id: str,
+    system_id: str,
+    collection: str,
+    locator: str,
+    sys_map: dict[str, str],
+    cap_time: datetime | None = None,
+) -> Fact:
     res_id = str(rec.get("resource_id") or rec.get("id") or f"{collection}_{locator}")
     prefix = res_id.rsplit("_", 1)[0] if "_" in res_id else res_id
     effective_sys = sys_map.get(prefix, system_id)
     fields = {str(k): (str(v) if v is not None else None) for k, v in rec.items()}
+    if cap_time and "event_time" not in fields:
+        fields["event_time"] = cap_time.isoformat()
     raw_state = rec.get("account_status") or rec.get("status")
 
     return Fact(

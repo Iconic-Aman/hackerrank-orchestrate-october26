@@ -32,24 +32,37 @@ def match_observations(
     name_idents = {i.norm: i for i in user.identifiers if i.kind == "name"}
 
     for fact in facts:
-        # 1. Temporal filter: ignore facts captured after audit_at
-        file_time = cap_times.get(fact.file_id)
-        if file_time and file_time > audit_at:
-            continue
+        # 1. Temporal filter: prefer event_time if present, else file capture time
+        event_time_str = fact.fields.get("event_time")
+        if event_time_str:
+            try:
+                event_time = datetime.fromisoformat(event_time_str.replace("Z", "+00:00"))
+                if event_time > audit_at:
+                    continue
+            except Exception:
+                file_time = cap_times.get(fact.file_id)
+                if file_time and file_time > audit_at:
+                    continue
+        else:
+            file_time = cap_times.get(fact.file_id)
+            if file_time and file_time > audit_at:
+                continue
 
         matched: list[Identifier] = []
         via = "identifier"
 
-        # Check user_id in common columns
-        for uid_col in ["user_id", "subject_reference"]:
-            val = fact.fields.get(uid_col)
-            if val and val in user_id_idents:
-                matched.append(user_id_idents[val])
+        # Check user_id in any field (covers user_id, subject_ref, customer_reference, correlation_key, etc.)
+        for field_name, field_val in fact.fields.items():
+            if not field_val or field_name == "raw_line":
+                continue
+            str_val = str(field_val).strip()
+            if str_val in user_id_idents and user_id_idents[str_val] not in matched:
+                matched.append(user_id_idents[str_val])
                 via = "user_id"
 
-        # Check all text values in fields
+        # Check all text values in fields for email, hash, phone, name
         for field_name, field_val in fact.fields.items():
-            if not field_val or field_name in ["user_id", "subject_reference"]:
+            if not field_val or field_name == "raw_line":
                 continue
             
             str_val = str(field_val)

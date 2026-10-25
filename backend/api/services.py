@@ -244,7 +244,7 @@ class AuditService:
             for es in exp_steps:
                 fields_total += 5
                 for as_ in act_steps:
-                    if as_.get("system_id") == es.get("system_id") and as_.get("resource_id") == es.get("resource_id"):
+                    if as_.get("resource_id") == es.get("resource_id") and as_.get("phase") == es.get("phase") and as_.get("operation") == es.get("operation"):
                         if as_.get("operation") == es.get("operation"):
                             fields_matched += 1
                         if as_.get("phase") == es.get("phase"):

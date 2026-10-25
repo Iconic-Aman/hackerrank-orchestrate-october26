@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -76,9 +77,26 @@ def parse_sql_snapshot(
 
             for r_idx, row_data in enumerate(rows):
                 fields = {col_names[i]: (str(row_data[i]) if row_data[i] is not None else None) for i in range(len(col_names))}
+                
+                # Unpack record_json if present
+                rec_json_str = fields.get("record_json")
+                if rec_json_str:
+                    try:
+                        sub_obj = json.loads(rec_json_str)
+                        if isinstance(sub_obj, dict):
+                            for k, v in sub_obj.items():
+                                if k not in fields or fields[k] is None:
+                                    fields[k] = str(v) if v is not None else None
+                    except Exception:
+                        pass
+
                 res_id = fields.get("resource_id") or fields.get("id") or f"{tbl}_{r_idx}"
                 prefix = str(res_id).rsplit("_", 1)[0] if "_" in str(res_id) else str(res_id)
-                system_id = sys_map.get(prefix, default_sys)
+                origin_sys = fields.get("origin_system")
+                system_id = origin_sys or sys_map.get(prefix, default_sys)
+
+                if cap_time and "event_time" not in fields:
+                    fields["event_time"] = fields.get("updated_at") or cap_time.isoformat()
 
                 # Determine raw_state
                 raw_state = fields.get("account_status") or fields.get("status")
