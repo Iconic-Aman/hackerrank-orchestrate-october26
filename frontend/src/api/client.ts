@@ -76,8 +76,8 @@ export const api = {
     return request<RunItem[]>("/runs");
   },
 
-  getEval: (dataset = "samples") => {
-    return request<EvalMetrics>(`/eval?dataset=${dataset}`);
+  getEval: (dataset = "samples", refresh = false) => {
+    return request<EvalMetrics>(`/eval?dataset=${dataset}&refresh=${refresh}`);
   },
 
   getUsage: () => {

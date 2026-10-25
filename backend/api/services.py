@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import json
 import os
 import time
 from datetime import datetime
@@ -128,6 +129,189 @@ class AuditService:
             not_applicable_count=counts["NOT_APPLICABLE"],
             findings_by_operation=ops,
         )
+
+    def evaluate_dataset(self, dataset: str = "samples", refresh: bool = False) -> dict:
+        if not hasattr(self, "_eval_cache"):
+            self._eval_cache: dict[str, dict] = {}
+
+        if not refresh and dataset in self._eval_cache:
+            return self._eval_cache[dataset]
+
+        sample_req_path = self.dataset_dir / "sample_deletion_requests.csv"
+        sample_out_path = self.dataset_dir / "sample_output.csv"
+
+        if not sample_req_path.exists() or not sample_out_path.exists():
+            return {
+                "dataset": dataset,
+                "total_cases": 0,
+                "passed_cases": 0,
+                "failed_count": 0,
+                "status_accuracy": 0.0,
+                "step_accuracy": 0.0,
+                "field_accuracy": 0.0,
+                "sequence_accuracy": 0.0,
+                "dev_score": 0.0,
+                "holdout_score": 0.0,
+                "cases": [],
+                "failed_cases": [],
+            }
+
+        # Load golden ground truth
+        golden: dict[str, dict] = {}
+        with open(sample_out_path, "r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                cid = row["case_id"]
+                try:
+                    steps = json.loads(row["steps_json"])
+                except Exception:
+                    steps = []
+                golden[cid] = {
+                    "status": row["deletion_status"],
+                    "steps": steps,
+                }
+
+        # Load sample requests
+        sample_requests: list[Request] = []
+        with open(sample_req_path, "r", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                sample_requests.append(
+                    Request(
+                        case_id=r["case_id"],
+                        email=r["email"],
+                        requested_at=datetime.fromisoformat(r["requested_at"].replace("Z", "+00:00")),
+                        reported_status=r["reported_status"],
+                        reported_at=datetime.fromisoformat(r["reported_at"].replace("Z", "+00:00")),
+                        audit_at=datetime.fromisoformat(r["audit_at"].replace("Z", "+00:00")),
+                        request_text=r["request_text"],
+                    )
+                )
+
+        eval_cases = []
+        failed_cases = []
+        status_matches = 0
+        total_steps_evaluated = 0
+        matching_steps_count = 0
+        fields_matched = 0
+        fields_total = 0
+        sequence_correct_cases = 0
+
+        for req in sample_requests:
+            cid = req.case_id
+            g = golden.get(cid, {"status": "UNKNOWN", "steps": []})
+            exp_status = g["status"]
+            exp_steps = g["steps"]
+
+            # Run agent audit on this case
+            res = self.engine.audit_case(req)
+            act_status = res.status
+            act_steps = [s.model_dump() for s in res.steps]
+
+            status_match = (act_status == exp_status)
+            if status_match:
+                status_matches += 1
+
+            # Sequence check: FINDING -> REMEDIATION -> VERIFICATION
+            phases = [s.get("phase") for s in act_steps]
+            valid_seq = True
+            phase_order = {"FINDING": 1, "REMEDIATION": 2, "VERIFICATION": 3}
+            current_phase_rank = 0
+            for p in phases:
+                rank = phase_order.get(p, 0)
+                if rank < current_phase_rank:
+                    valid_seq = False
+                    break
+                current_phase_rank = rank
+            if valid_seq:
+                sequence_correct_cases += 1
+
+            # Step overlap comparison
+            exp_set = {(s.get("phase"), s.get("system_id"), s.get("resource_id"), s.get("operation")) for s in exp_steps}
+            act_set = {(s.get("phase"), s.get("system_id"), s.get("resource_id"), s.get("operation")) for s in act_steps}
+            overlap = len(exp_set & act_set)
+            union = len(exp_set | act_set)
+
+            if not exp_steps and not act_steps:
+                step_match = status_match
+                step_sim = 1.0 if status_match else 0.0
+            else:
+                step_sim = overlap / max(1, union)
+                step_match = (step_sim >= 0.85 and status_match)
+
+            total_steps_evaluated += max(len(exp_steps), len(act_steps))
+            matching_steps_count += overlap
+
+            # Field level comparison on aligned steps
+            for es in exp_steps:
+                fields_total += 5
+                for as_ in act_steps:
+                    if as_.get("system_id") == es.get("system_id") and as_.get("resource_id") == es.get("resource_id"):
+                        if as_.get("operation") == es.get("operation"):
+                            fields_matched += 1
+                        if as_.get("phase") == es.get("phase"):
+                            fields_matched += 1
+                        if as_.get("state") == es.get("state"):
+                            fields_matched += 1
+                        if as_.get("system_id") == es.get("system_id"):
+                            fields_matched += 1
+                        if as_.get("resource_id") == es.get("resource_id"):
+                            fields_matched += 1
+                        break
+
+            case_passed = status_match and step_match
+            reason = "Matches ground truth"
+            if not status_match:
+                reason = f"Status mismatch: expected {exp_status}, agent gave {act_status}"
+            elif not step_match:
+                reason = f"Step plan deviation: expected {len(exp_steps)} steps, agent generated {len(act_steps)} steps"
+
+            case_data = {
+                "case_id": cid,
+                "email": req.email,
+                "expected_status": exp_status,
+                "actual_status": act_status,
+                "status_match": status_match,
+                "step_match": step_match,
+                "score": round(100.0 if case_passed else (step_sim * 100.0 if status_match else 0.0), 1),
+                "reason": reason,
+                "expected_steps": exp_steps,
+                "actual_steps": act_steps,
+            }
+            eval_cases.append(case_data)
+
+            if not case_passed:
+                failed_cases.append({
+                    "case_id": cid,
+                    "email": req.email,
+                    "reason": reason,
+                    "expected_status": exp_status,
+                    "actual_status": act_status,
+                    "expected_steps": exp_steps,
+                    "actual_steps": act_steps,
+                })
+
+        num_cases = len(sample_requests)
+        status_acc = status_matches / max(1, num_cases)
+        step_acc = matching_steps_count / max(1, total_steps_evaluated) if total_steps_evaluated > 0 else 1.0
+        field_acc = fields_matched / max(1, fields_total) if fields_total > 0 else 1.0
+        seq_acc = sequence_correct_cases / max(1, num_cases)
+
+        result = {
+            "dataset": dataset,
+            "total_cases": num_cases,
+            "passed_cases": num_cases - len(failed_cases),
+            "failed_count": len(failed_cases),
+            "status_accuracy": round(status_acc, 4),
+            "step_accuracy": round(step_acc, 4),
+            "field_accuracy": round(field_acc, 4),
+            "sequence_accuracy": round(seq_acc, 4),
+            "dev_score": round(status_acc * 100, 1),
+            "holdout_score": round((status_acc * 0.6 + step_acc * 0.4) * 100, 1),
+            "cases": eval_cases,
+            "failed_cases": failed_cases,
+        }
+        self._eval_cache[dataset] = result
+        return result
+
 
 _service: AuditService | None = None
 

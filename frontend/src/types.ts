@@ -56,21 +56,41 @@ export interface RunItem {
   not_applicable_count: number;
 }
 
+export interface CaseEvalResult {
+  case_id: string;
+  email: string;
+  expected_status: string;
+  actual_status: string;
+  status_match: boolean;
+  step_match: boolean;
+  score: number;
+  reason?: string;
+  expected_steps: Partial<Step>[];
+  actual_steps: Partial<Step>[];
+}
+
 export interface FailedCaseDiff {
   case_id: string;
+  email?: string;
   reason: string;
+  expected_status?: string;
+  actual_status?: string;
   expected_steps: Partial<Step>[];
   actual_steps: Partial<Step>[];
 }
 
 export interface EvalMetrics {
   dataset: string;
+  total_cases?: number;
+  passed_cases?: number;
+  failed_count?: number;
   status_accuracy: number;
   step_accuracy: number;
   field_accuracy: number;
   sequence_accuracy: number;
   dev_score: number;
   holdout_score: number;
+  cases?: CaseEvalResult[];
   failed_cases: FailedCaseDiff[];
 }
 

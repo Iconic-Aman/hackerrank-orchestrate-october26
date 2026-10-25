@@ -29,30 +29,13 @@ def list_runs(svc: AuditService = Depends(get_audit_service)) -> list[dict]:
     ]
 
 @router.get("/eval")
-def get_evaluation_metrics(dataset: str = "samples", svc: AuditService = Depends(get_audit_service)) -> dict:
-    return {
-        "dataset": dataset,
-        "status_accuracy": 1.0,
-        "step_accuracy": 0.968,
-        "field_accuracy": 0.984,
-        "sequence_accuracy": 0.968,
-        "dev_score": 100.0,
-        "holdout_score": 98.2,
-        "failed_cases": [
-            {
-                "case_id": "case_11",
-                "reason": "14-step golden sequence ordering deviation in replica sync",
-                "expected_steps": [
-                    {"step_no": 1, "phase": "FINDING", "system_id": "account_service", "resource_id": "account_011", "operation": "REPORT_REMAINING_RECORD", "state": "PRESENT"},
-                    {"step_no": 2, "phase": "REMEDIATION", "system_id": "account_service", "resource_id": "account_011", "operation": "DELETE_RECORD", "state": "ABSENT"}
-                ],
-                "actual_steps": [
-                    {"step_no": 1, "phase": "FINDING", "system_id": "account_service", "resource_id": "account_011", "operation": "REPORT_REMAINING_RECORD", "state": "PRESENT"},
-                    {"step_no": 2, "phase": "REMEDIATION", "system_id": "account_service", "resource_id": "account_011", "operation": "DELETE_RECORD", "state": "ABSENT"}
-                ]
-            }
-        ]
-    }
+@router.post("/eval")
+def get_evaluation_metrics(
+    dataset: str = "samples",
+    refresh: bool = False,
+    svc: AuditService = Depends(get_audit_service),
+) -> dict:
+    return svc.evaluate_dataset(dataset=dataset, refresh=refresh)
 
 @router.get("/usage")
 def get_usage_metrics() -> dict:

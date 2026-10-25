@@ -27,10 +27,13 @@ from backend.api.routes.audit import router as audit_router
 from backend.api.routes.cases import router as cases_router
 from backend.api.routes.stats import router as stats_router
 
-app.include_router(cases_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
-app.include_router(stats_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
-app.include_router(audit_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
-app.include_router(analytics_router, prefix="/api/v1", dependencies=[Depends(verify_token)])
+# Mount on both /api/v1 and root prefix so frontend requests with or without /api/v1 work
+for pfx in ("/api/v1", ""):
+    app.include_router(cases_router, prefix=pfx, dependencies=[Depends(verify_token)])
+    app.include_router(stats_router, prefix=pfx, dependencies=[Depends(verify_token)])
+    app.include_router(audit_router, prefix=pfx, dependencies=[Depends(verify_token)])
+    app.include_router(analytics_router, prefix=pfx, dependencies=[Depends(verify_token)])
+
 
 
 class HealthResponse(BaseModel):
