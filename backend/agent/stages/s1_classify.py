@@ -10,6 +10,8 @@ class Gate1Result(BaseModel):
     is_deletion: bool
     confidence: float = 1.0
     reason: str = ""
+    detected_language: str = "English"
+    english_translation: str = ""
     errors: list[str] = Field(default_factory=list)
 
 
@@ -48,53 +50,67 @@ NON_DELETION_PATTERNS = [
 
 # Clear deletion patterns → immediately return True (unless negation already fired)
 DELETION_PATTERNS = [
-    r"\bdelete\b",
-    r"\bdeletion\b",
-    r"\berase\b",
-    r"\berasure\b",
-    r"\berased\b",
-    r"remove (my|the|all) (account|data|profile|information|records?)",
-    r"close (my|the|this) account",
-    r"eliminaci[oó]n",
-    r"eliminar",
-    r"borrar",
-    r"\bsuppression\b",
-    r"\bsupprimer\b",
-    r"exclus[aã]o",
-    r"excluir",
+    r"delet",
+    r"eras",
+    r"remov",
+    r"clos",
+    r"purg",
+    r"wip",
+    r"elimin",
+    r"borr",
+    r"supprim",
+    r"suppress",
+    r"exclu",
     r"l[oö]sch",
+    r"削除",
+    r"消去",
+    r"消して",
+    r"解約",
     r"right (to be|of) (forgotten|erasure)",
     r"forget me",
     r"wipe (my|all|the) (data|records?|account)",
     r"stop being in your system",
     r"remove me from (your|all) (system|database|records?)",
     r"purge (my|the|all) (data|records?|account)",
+    r"account.*gone",
+    r"terminate (my|the) account",
+    r"cancel (my|the) account",
 ]
 
 # ---------------------------------------------------------------------------
 # LLM classification prompt
 # ---------------------------------------------------------------------------
 _SYSTEM = (
-    "You are a data-deletion request classifier for a privacy compliance system. "
-    "Your sole job is to determine whether the user's message is an authoritative "
-    "request to delete/erase their personal data under GDPR / CCPA or equivalent law."
+    "You are an expert multilingual privacy compliance auditor for GDPR, CCPA, and global data protection regulations. "
+    "Your task is to analyze user requests submitted in any language, detect the language, translate the request into English, "
+    "and determine if the user is authoritatively demanding permanent deletion/erasure of their personal data or account."
 )
 
-_USER_TMPL = """Classify the following request. Answer with exactly one JSON object and nothing else.
+_USER_TMPL = """Analyze the following user request using a 3-step chain-of-thought:
+1. DETECT LANGUAGE: Identify the language of the request (e.g. Japanese, French, Spanish, German, Portuguese, English).
+2. TRANSLATE TO ENGLISH: Provide an accurate, faithful English translation (preserving any negations like "don't delete" or mixed requests).
+3. PREDICT DELETION INTENT: Based on the English translation, determine if the user is authoritatively requesting data deletion/erasure.
 
-Rules:
-- "is_deletion": true only when the person clearly and directly asks to have their personal data
-  permanently deleted or their account removed.
-- "is_deletion": false for: requests to access/export/download data, opt-out of marketing only,
-  corrections, rhetorical questions ("how do I delete?"), negations ("please don't delete"),
-  questions about deletion policy, or ambiguous/polite complaints that don't explicitly ask for erasure.
-- Mixed requests ("send me my data, then delete it") → true if deletion is explicitly requested in addition to another action.
-- Respond in the request language — but always output JSON in English keys.
+Classification Rules:
+- "is_deletion": true ONLY when the person explicitly requests to delete, erase, close, or wipe their account or personal data.
+- "is_deletion": false for:
+  * Negations: "please do not delete my account", "keep my data"
+  * Data access or export: "send me my data", "download my past invoices"
+  * Marketing opt-outs: "stop promotional emails"
+  * Profile corrections: "correct my misspelled name"
+  * Rhetorical / how-to questions: "how do I delete my account?", "explain your deletion policy"
+- Mixed requests: "send me my data, then delete my account" -> true (since deletion is explicitly requested).
 
-Required JSON format:
-{{"is_deletion": <true|false>, "confidence": <0.0-1.0>, "reason": "<one short English sentence>"}}
+Output strictly valid JSON with this exact structure:
+{{
+  "detected_language": "<Language name>",
+  "english_translation": "<Faithful English translation>",
+  "is_deletion": <true|false>,
+  "confidence": <0.0-1.0>,
+  "reason": "<One sentence explanation based on the translated text>"
+}}
 
-Request:
+User Request:
 \"\"\"
 {text}
 \"\"\"
@@ -102,7 +118,7 @@ Request:
 
 
 def _llm_classify(text: str) -> Gate1Result | None:
-    """Call OpenRouter to classify. Returns None if LLM unavailable or response invalid."""
+    """Call OpenRouter to detect language, translate to English, and classify deletion intent."""
     try:
         from backend.agent.llm.openrouter_client import chat_completion  # late import
     except Exception:
@@ -114,7 +130,7 @@ def _llm_classify(text: str) -> Gate1Result | None:
         prompt=_USER_TMPL.format(text=text[:2000]),
         system=_SYSTEM,
         temperature=0.0,
-        max_tokens=128,
+        max_tokens=256,
     )
     if raw is None:
         return None
@@ -127,9 +143,18 @@ def _llm_classify(text: str) -> Gate1Result | None:
     try:
         obj = json.loads(json_match.group(0))
         is_del = bool(obj.get("is_deletion", False))
-        confidence = float(obj.get("confidence", 0.8))
+        confidence = float(obj.get("confidence", 0.95))
         reason = str(obj.get("reason", "LLM classified"))
-        return Gate1Result(ok=True, is_deletion=is_del, confidence=confidence, reason=reason)
+        detected_lang = str(obj.get("detected_language", "English"))
+        translation = str(obj.get("english_translation", text))
+        return Gate1Result(
+            ok=True,
+            is_deletion=is_del,
+            confidence=confidence,
+            reason=f"[{detected_lang}] {reason}",
+            detected_language=detected_lang,
+            english_translation=translation,
+        )
     except Exception:
         return None
 
@@ -147,36 +172,35 @@ def classify_request(
       Tier 2 — LLM via OpenRouter for ambiguous / multilingual / edge cases.
       Fallback — conservative regex result if LLM unavailable.
     """
-    text = (request_text or "").strip()
-    if not text:
+    raw = (request_text or "").strip()
+    if not raw:
         return (
             False,
             "Empty request text",
             Gate1Result(ok=False, is_deletion=False, confidence=0.0, errors=["Empty request text"]),
         )
 
+    # Normalize smart quotes and punctuation
+    text = raw.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+
     # ── Tier 1a: regex non-deletion (fast exit) ──────────────────────────
     for pattern in NON_DELETION_PATTERNS:
         m = re.search(pattern, text, re.I)
         if m:
-            # Still validate with LLM if the match was a negation-type pattern
-            # (the regex might fire on "don't delete" inside a real deletion request)
             is_negation_pattern = any(
                 kw in pattern for kw in ["don", "do not", "how do", "can you tell", "access", "portab", "opt"]
             )
             if not is_negation_pattern:
-                # High-confidence structural negative — skip LLM
                 reason = f"Request does not authorize deletion: matched '{m.group(0)}'"
                 return False, reason, Gate1Result(ok=True, is_deletion=False, confidence=0.99, reason=reason)
-            # For negation-type patterns: let LLM confirm, but set a hint
+            # Try LLM to check if it's mixed request or negation
             llm_result = _llm_classify(text)
             if llm_result is not None:
                 return llm_result.is_deletion, llm_result.reason, llm_result
-            # LLM unavailable → trust regex
             reason = f"Request does not authorize deletion: matched '{m.group(0)}'"
             return False, reason, Gate1Result(ok=True, is_deletion=False, confidence=0.90, reason=reason)
 
-    # ── Tier 1b: regex deletion (fast exit for unambiguous cases) ────────
+    # ── Tier 1b: regex deletion match ────────────────────────────────────
     deletion_match: re.Match | None = None
     for pattern in DELETION_PATTERNS:
         m = re.search(pattern, text, re.I)
@@ -184,24 +208,20 @@ def classify_request(
             deletion_match = m
             break
 
-    # Decide if we need LLM:
-    # • Has deletion match AND no non-ASCII → high confidence, skip LLM
-    # • No match OR non-ASCII present → use LLM
-    has_non_ascii = any(ord(c) > 127 for c in text)
-    needs_llm = deletion_match is None or has_non_ascii
+    if deletion_match:
+        reason = f"Request authorizes deletion: matched '{deletion_match.group(0)}'"
+        return True, reason, Gate1Result(ok=True, is_deletion=True, confidence=0.99, reason=reason)
 
-    if needs_llm:
-        llm_result = _llm_classify(text)
-        if llm_result is not None:
-            return llm_result.is_deletion, llm_result.reason, llm_result
-        # LLM unavailable → conservative fallback
-        if deletion_match:
-            reason = f"Request authorizes deletion: matched '{deletion_match.group(0)}'"
-            return True, reason, Gate1Result(ok=True, is_deletion=True, confidence=0.75, reason=reason)
-        # Non-ASCII, no match, no LLM → conservative: treat as NOT deletion (avoid false positives)
-        reason = "Could not determine deletion intent; LLM unavailable and no pattern matched"
-        return False, reason, Gate1Result(ok=True, is_deletion=False, confidence=0.50, reason=reason)
+    # ── Tier 2: LLM fallback for unrecognized text ───────────────────────
+    llm_result = _llm_classify(text)
+    if llm_result is not None:
+        return llm_result.is_deletion, llm_result.reason, llm_result
 
-    # ── Fast path: clear deletion match, ASCII-only ───────────────────────
-    reason = f"Request authorizes deletion: matched '{deletion_match.group(0)}'"  # type: ignore[union-attr]
-    return True, reason, Gate1Result(ok=True, is_deletion=True, confidence=0.99, reason=reason)
+    # ── Tier 3: Workflow claim heuristic fallback ────────────────────────
+    if reported_status in ("COMPLETE", "PARTIALLY_COMPLETE"):
+        reason = f"Deletion inferred from reported status '{reported_status}' without non-deletion patterns"
+        return True, reason, Gate1Result(ok=True, is_deletion=True, confidence=0.85, reason=reason)
+
+    reason = "Could not determine deletion intent; no patterns matched"
+    return False, reason, Gate1Result(ok=True, is_deletion=False, confidence=0.50, reason=reason)
+

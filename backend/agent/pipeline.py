@@ -35,6 +35,27 @@ class AuditEngine:
         self.file_capture_times: dict[str, datetime] = {}
         self._load_evidence_index()
 
+        # Load system activities
+        self.system_activities: list[dict] = []
+        act_path = self.dataset_path / "system_activity.csv"
+        if act_path.exists():
+            with open(act_path, "r", encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    try:
+                        etime = datetime.fromisoformat(r["event_time"].replace("Z", "+00:00"))
+                    except Exception:
+                        etime = datetime.min
+                    self.system_activities.append({
+                        "activity_id": r["activity_id"],
+                        "event_time": etime,
+                        "event_type": r["event_type"],
+                        "source_system": r["source_system"],
+                        "target_system": r["target_system"],
+                        "resource_id": r["resource_id"],
+                        "reported_result": r["reported_result"],
+                        "details": r["details"],
+                    })
+
     def _load_evidence_index(self) -> None:
         with open(self.dataset_path / "evidence_files.csv", "r", encoding="utf-8") as f:
             manifest_rows = list(csv.DictReader(f))
@@ -67,6 +88,17 @@ class AuditEngine:
 
         # S4: Match Observations
         obs, res_set, _ = match_observations(user, self.facts, req.audit_at, self.file_capture_times)
+
+        # Correlate system activities near reported_at to identify target resources
+        rep_time = req.reported_at
+        for act in self.system_activities:
+            if abs((act["event_time"] - rep_time).total_seconds()) <= 600:
+                if any(k in act["event_type"] for k in ("DELETE", "ANONYMIZE", "INDEX", "SYNC", "UPDATE")):
+                    sys_id = act["target_system"] or act["source_system"]
+                    res_id = act["resource_id"]
+                    if sys_id and res_id:
+                        res_set.add((sys_id, res_id))
+
 
         # S5: Resolve States
         states, _ = resolve_resource_states(
