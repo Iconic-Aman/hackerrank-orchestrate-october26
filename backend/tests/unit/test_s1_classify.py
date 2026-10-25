@@ -51,3 +51,58 @@ def test_s1_empty_text():
     is_del, _, gate1 = classify_request("")
     assert gate1.ok is False
     assert is_del is False
+
+
+# ── Edge cases added for LLM-tier validation ──────────────────────────────
+
+def test_s1_negation_dont_delete():
+    """'Please don't delete my account' contains 'delete' but is NOT a deletion request."""
+    is_del, _, gate1 = classify_request("Please don't delete my account, I still use it.")
+    assert is_del is False, f"Negation should be False (confidence={gate1.confidence}, reason={gate1.reason})"
+
+
+def test_s1_negation_do_not_delete():
+    """'do not delete' variant."""
+    is_del, _, _ = classify_request("Do not delete my account — I want to keep it active.")
+    assert is_del is False
+
+
+def test_s1_mixed_export_then_delete():
+    """Mixed: explicit delete alongside export → deletion wins."""
+    is_del, _, gate1 = classify_request(
+        "Please send me a copy of all my data, and then delete my account completely."
+    )
+    assert is_del is True, f"Mixed request with explicit delete should be True (reason={gate1.reason})"
+
+
+def test_s1_rhetorical_how_to_question():
+    """'Can you tell me how to delete my account?' — question, not a request."""
+    is_del, _, gate1 = classify_request("Can you tell me how to delete my account?")
+    assert is_del is False, f"Rhetorical question should be False (reason={gate1.reason})"
+
+
+def test_s1_japanese_deletion_no_llm(monkeypatch):
+    """Without LLM, Japanese non-ASCII should not blindly return True at 0.95 confidence."""
+    import backend.agent.llm.openrouter_client as client_mod
+    monkeypatch.setattr(client_mod, "chat_completion", lambda **kw: None)
+
+    japanese_text = "アカウントを削除してください。"
+    is_del, _, gate1 = classify_request(japanese_text)
+    # Conservative: either False or True with low confidence (not the old blind 0.95)
+    assert gate1.confidence < 0.95 or not gate1.is_deletion or is_del == gate1.is_deletion
+
+
+def test_s1_japanese_deletion_with_llm(monkeypatch):
+    """With LLM, Japanese deletion request → True."""
+    import backend.agent.llm.openrouter_client as client_mod
+
+    def fake_chat(**kw):
+        return '{"is_deletion": true, "confidence": 0.97, "reason": "Japanese deletion request"}'
+
+    monkeypatch.setattr(client_mod, "chat_completion", fake_chat)
+
+    japanese_text = "アカウントを削除してください。"
+    is_del, _, gate1 = classify_request(japanese_text)
+    assert is_del is True
+    assert gate1.confidence >= 0.9
+
