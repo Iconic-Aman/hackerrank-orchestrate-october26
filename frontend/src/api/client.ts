@@ -11,8 +11,9 @@ import type {
 export function getApiConfig(): { baseUrl: string; secretKey: string } {
   const envUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL;
   const baseUrl = localStorage.getItem("API_BASE_URL") || envUrl || "/api/v1";
-  const secretKey = localStorage.getItem("SECRET_KEY") || import.meta.env.VITE_SECRET_KEY || "";
+  const secretKey = localStorage.getItem("SECRET_KEY") || import.meta.env.VITE_SECRET_KEY || "dev-secret-key";
   return { baseUrl: baseUrl.replace(/\/$/, ""), secretKey };
+
 }
 
 export function saveApiConfig(baseUrl: string, secretKey: string): void {
